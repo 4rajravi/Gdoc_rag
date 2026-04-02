@@ -1,0 +1,33 @@
+# Ignore data and document formats
+*.csv
+*.pdf
+*.txt
+*.xlsx
+*.docx
+*.html
+*.xml
+*.json
+*.yaml
+
+# Ignore logs and temporary files
+*.log
+temp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual Environments
+venv/
+env/
+.venv/
+bin/
