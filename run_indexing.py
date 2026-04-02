@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 German Bureaucracy RAG — Indexing Pipeline
 ==========================================
