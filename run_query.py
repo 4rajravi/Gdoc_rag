@@ -1,195 +1,150 @@
+#!/usr/bin/env python3
 """
-RAG Pipeline — Orchestrates the full query-to-answer flow.
-===========================================================
+German Bureaucracy RAG — Query Interface
+=========================================
 
-Flow:
-1. Intent classification (rule-based, instant)
-2. Query reformulation (Ollama, if query is vague)
-3. Multi-query expansion (Ollama, generates 2-3 variants)
-4. Hierarchical retrieval (Qdrant, searches appropriate levels)
-5. Merge + deduplicate results from all query variants
-6. Cross-encoder reranking (ms-marco-MiniLM)
-7. Context assembly + LLM generation (Ollama)
-8. Return answer with sources
+Interactive CLI to ask questions about German bureaucracy.
 
-The pipeline can be run in different modes:
-- full: all stages (default)
-- fast: skip reformulation + expansion (for low-latency)
-- debug: print intermediate results at each stage
+Prerequisites:
+    - Qdrant running: docker run -p 6333:6333 qdrant/qdrant
+    - Ollama running with model: ollama serve & ollama pull llama3.1:8b
+    - Indexing pipeline completed: python run_indexing.py --recreate
+
+Usage:
+    # Interactive mode
+    python run_query.py
+
+    # Single question
+    python run_query.py --question "How do I register my address?"
+
+    # Debug mode (shows all pipeline stages)
+    python run_query.py --debug
+
+    # Fast mode (skip query expansion — lower latency)
+    python run_query.py --fast
 """
 
+import argparse
 import logging
-import time
-from dataclasses import dataclass, field
+import sys
 
-from .query_processor import classify_intent, reformulate_query, expand_query
-from .retriever import HierarchicalRetriever
-from .reranker import Reranker
-from .generator import OllamaClient, Generator
-
-logger = logging.getLogger(__name__)
+from processing.embedder import Embedder
+from retrieval.pipeline import RAGPipeline
 
 
-@dataclass
-class PipelineResult:
-    """Complete result from the RAG pipeline."""
-    query: str
-    answer: str
-    sources: list
-    chunks_used: int
-
-    # Debug info
-    intent_category: str = ""
-    intent_specificity: str = ""
-    search_levels: list = field(default_factory=list)
-    reformulated_query: str = ""
-    expanded_queries: list = field(default_factory=list)
-    retrieved_count: int = 0
-    reranked_count: int = 0
-    timing: dict = field(default_factory=dict)
+def setup_logging(verbose: bool = False):
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
-class RAGPipeline:
-    """
-    Full RAG pipeline from query to answer.
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Ask questions about German bureaucracy.",
+    )
+    parser.add_argument(
+        "--question", "-q",
+        default=None,
+        help="Ask a single question (non-interactive mode)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show pipeline internals (intent, retrieval, reranking)",
+    )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Fast mode — skip query reformulation and expansion",
+    )
+    parser.add_argument(
+        "--model",
+        default="llama3.1:8b",
+        help="Ollama model to use (default: llama3.1:8b)",
+    )
+    parser.add_argument(
+        "--qdrant-host",
+        default="localhost",
+    )
+    parser.add_argument(
+        "--qdrant-port",
+        type=int,
+        default=6333,
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+    )
+    return parser.parse_args()
 
-    Usage:
-        pipeline = RAGPipeline(
-            qdrant_client=client,
-            embedder=embedder,
-            ollama_model="llama3.1:8b",
-        )
-        result = pipeline.query("How do I register my address in Germany?")
-        print(result.answer)
-    """
 
-    def __init__(
-        self,
-        qdrant_client,
-        embedder,
-        ollama_model: str = "llama3.1:8b",
-        ollama_url: str = "http://localhost:11434",
-        reranker_top_k: int = 5,
-        retriever_top_k_per_level: int = 10,
-    ):
-        self.retriever = HierarchicalRetriever(qdrant_client, embedder)
-        self.reranker = Reranker()
-        self.ollama = OllamaClient(model=ollama_model, base_url=ollama_url)
-        self.generator = Generator(self.ollama)
+def print_result(result):
+    """Pretty-print a pipeline result."""
+    print("\n" + "=" * 60)
+    print(result.answer)
+    print("=" * 60)
 
-        self.reranker_top_k = reranker_top_k
-        self.retriever_top_k = retriever_top_k_per_level
+    if result.sources:
+        print("\nSources:")
+        for src in result.sources:
+            print(f"  - {src['title']}")
+            print(f"    {src['url']}")
 
-    def query(
-        self,
-        user_query: str,
-        mode: str = "full",  # "full", "fast", or "debug"
-        category_override: str = None,
-    ) -> PipelineResult:
-        """
-        Run the full RAG pipeline on a user query.
+    print(f"\n[{result.chunks_used} chunks | "
+          f"{result.intent_category} | "
+          f"{result.intent_specificity} | "
+          f"{sum(result.timing.values()):.1f}s total]")
 
-        Args:
-            user_query: the question to answer
-            mode: "full" (all stages), "fast" (skip expansion), "debug" (verbose)
-            category_override: force a specific category filter
 
-        Returns:
-            PipelineResult with answer, sources, and debug info
-        """
-        timings = {}
-        debug = mode == "debug"
+def main():
+    args = parse_args()
+    setup_logging(args.verbose)
 
-        # ─── 1. Intent Classification ──────────────────────────
-        t0 = time.time()
-        intent = classify_intent(user_query)
-        timings["intent"] = time.time() - t0
+    mode = "debug" if args.debug else ("fast" if args.fast else "full")
 
-        if category_override:
-            intent.category = category_override
+    # Initialize pipeline
+    print("Loading models...")
+    from qdrant_client import QdrantClient
+    client = QdrantClient(host=args.qdrant_host, port=args.qdrant_port)
+    embedder = Embedder()
 
-        if debug:
-            print(f"\n[Intent] category={intent.category} "
-                  f"specificity={intent.specificity} "
-                  f"levels={intent.search_levels}")
+    pipeline = RAGPipeline(
+        qdrant_client=client,
+        embedder=embedder,
+        ollama_model=args.model,
+    )
+    print("Ready!\n")
 
-        # ─── 2. Query Reformulation ────────────────────────────
-        reformulated = user_query
-        if mode == "full" or mode == "debug":
-            t0 = time.time()
-            reformulated = reformulate_query(user_query, intent, self.ollama)
-            timings["reformulation"] = time.time() - t0
+    # Single question mode
+    if args.question:
+        result = pipeline.query(args.question, mode=mode)
+        print_result(result)
+        return
 
-            if debug and reformulated != user_query:
-                print(f"[Reformulated] '{user_query}' → '{reformulated}'")
+    # Interactive mode
+    print("German Bureaucracy Helper (RAG)")
+    print("Type your question, or 'quit' to exit.\n")
 
-        # ─── 3. Multi-Query Expansion ──────────────────────────
-        query_variants = [reformulated]
-        if mode == "full" or mode == "debug":
-            t0 = time.time()
-            query_variants = expand_query(reformulated, intent, self.ollama)
-            timings["expansion"] = time.time() - t0
+    while True:
+        try:
+            query = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nGoodbye!")
+            break
 
-            if debug:
-                print(f"[Expanded] {len(query_variants)} variants: {query_variants}")
+        if not query:
+            continue
+        if query.lower() in ("quit", "exit", "q"):
+            print("Goodbye!")
+            break
 
-        # ─── 4. Hierarchical Retrieval ─────────────────────────
-        t0 = time.time()
+        result = pipeline.query(query, mode=mode)
+        print_result(result)
+        print()
 
-        category_filter = intent.category if intent.category_confidence > 0.3 else None
 
-        retrieved = self.retriever.search_multi_query(
-            queries=query_variants,
-            search_levels=intent.search_levels,
-            category_filter=category_filter,
-            top_k_per_level=self.retriever_top_k,
-        )
-        timings["retrieval"] = time.time() - t0
-
-        if debug:
-            print(f"[Retrieved] {len(retrieved)} unique chunks")
-            for c in retrieved[:5]:
-                print(f"  [{c.score:.3f}] {c.level} | {c.source} — {c.section_header}")
-
-        # ─── 5. Reranking ──────────────────────────────────────
-        t0 = time.time()
-        reranked = self.reranker.rerank(
-            query=user_query,  # rerank against ORIGINAL query
-            chunks=retrieved,
-            top_k=self.reranker_top_k,
-        )
-        timings["reranking"] = time.time() - t0
-
-        if debug:
-            print(f"[Reranked] top {len(reranked)}:")
-            for c in reranked:
-                print(f"  [{c.score:.3f}] {c.level} | {c.source} — {c.section_header}")
-
-        # ─── 6. Generation ─────────────────────────────────────
-        t0 = time.time()
-        gen_result = self.generator.generate_answer(
-            query=user_query,  # generate against ORIGINAL query
-            chunks=reranked,
-        )
-        timings["generation"] = time.time() - t0
-
-        if debug:
-            total = sum(timings.values())
-            print(f"\n[Timing] total={total:.1f}s")
-            for stage, t in timings.items():
-                print(f"  {stage}: {t:.1f}s")
-
-        return PipelineResult(
-            query=user_query,
-            answer=gen_result["answer"],
-            sources=gen_result["sources"],
-            chunks_used=gen_result["chunks_used"],
-            intent_category=intent.category,
-            intent_specificity=intent.specificity,
-            search_levels=intent.search_levels,
-            reformulated_query=reformulated,
-            expanded_queries=query_variants,
-            retrieved_count=len(retrieved),
-            reranked_count=len(reranked),
-            timing=timings,
-        )
+if __name__ == "__main__":
+    main()
