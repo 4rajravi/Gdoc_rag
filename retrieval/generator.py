@@ -19,7 +19,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "llama3.1:8b"
+DEFAULT_MODEL = "llama3.1"
 OLLAMA_URL = "http://localhost:11434"
 
 SYSTEM_PROMPT = """You are a helpful assistant specializing in German bureaucracy for international residents and students.
@@ -51,11 +51,23 @@ class OllamaClient:
     def _verify_connection(self):
         """Check that Ollama is running and model is available."""
         try:
-            resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
-            resp.raise_for_status()
-            models = [m["name"] for m in resp.json().get("models", [])]
+            # Try /api/tags first (legacy), fall back to /v1/models
+            resp = None
+            models = []
+            for endpoint in ["/api/tags", "/v1/models"]:
+                try:
+                    resp = requests.get(f"{self.base_url}{endpoint}", timeout=5)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    if "models" in data:
+                        models = [m.get("name", m.get("id", "")) for m in data["models"]]
+                    elif "data" in data:
+                        models = [m.get("id", "") for m in data["data"]]
+                    if models:
+                        break
+                except Exception:
+                    continue
 
-            # Check if our model is available (handle tag variations)
             model_base = self.model.split(":")[0]
             available = any(model_base in m for m in models)
 
@@ -74,56 +86,36 @@ class OllamaClient:
 
     def generate(self, prompt: str, system: str = None, temperature: float = 0.1) -> str:
         """
-        Generate a completion from Ollama.
+        Generate a completion from Ollama (via OpenAI-compatible endpoint).
 
         Uses low temperature (0.1) for factual responses.
         For query reformulation, you might want 0.3-0.5.
         """
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": temperature,
-            },
-        }
-
+        messages = []
         if system:
-            payload["system"] = system
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
 
-        try:
-            resp = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=120,
-            )
-            resp.raise_for_status()
-            return resp.json()["response"]
-        except Exception as e:
-            logger.error(f"Ollama generation failed: {e}")
-            raise
+        return self.chat(messages, temperature=temperature)
 
     def chat(self, messages: list[dict], temperature: float = 0.1) -> str:
         """
-        Chat-style completion (for multi-turn or system+user messages).
+        Chat-style completion using OpenAI-compatible /v1/chat/completions.
         """
         payload = {
             "model": self.model,
             "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": temperature,
-            },
+            "temperature": temperature,
         }
 
         try:
             resp = requests.post(
-                f"{self.base_url}/api/chat",
+                f"{self.base_url}/v1/chat/completions",
                 json=payload,
                 timeout=120,
             )
             resp.raise_for_status()
-            return resp.json()["message"]["content"]
+            return resp.json()["choices"][0]["message"]["content"]
         except Exception as e:
             logger.error(f"Ollama chat failed: {e}")
             raise
@@ -232,3 +224,4 @@ Answer the question based on the context above. Cite sources by their labels (e.
         }
 
         return result
+    

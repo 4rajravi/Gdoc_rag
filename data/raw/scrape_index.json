@@ -1,0 +1,24 @@
+{
+  "total_documents": 156,
+  "total_words": 204880,
+  "total_pdfs": 109,
+  "total_pdf_size_mb": 159.09,
+  "sources": {
+    "make-it-in-germany": 80,
+    "howtogermany": 11,
+    "allaboutberlin": 40,
+    "hamburg.de": 25
+  },
+  "categories": {
+    "housing": 17,
+    "visa": 78,
+    "tax": 9,
+    "general": 16,
+    "work": 7,
+    "anmeldung": 14,
+    "health_insurance": 11,
+    "banking": 3,
+    "university": 1
+  },
+  "scraped_at": "2026-04-02T12:57:07.939150+00:00"
+}

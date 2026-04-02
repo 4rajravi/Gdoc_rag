@@ -62,8 +62,8 @@ def parse_args():
     )
     parser.add_argument(
         "--model",
-        default="llama3.1:8b",
-        help="Ollama model to use (default: llama3.1:8b)",
+        default="llama3.1",
+        help="Ollama model to use (default: llama3.1)",
     )
     parser.add_argument(
         "--qdrant-host",
@@ -148,3 +148,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

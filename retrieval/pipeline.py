@@ -67,7 +67,7 @@ class RAGPipeline:
         self,
         qdrant_client,
         embedder,
-        ollama_model: str = "llama3.1:8b",
+        ollama_model: str = "llama3.1",
         ollama_url: str = "http://localhost:11434",
         reranker_top_k: int = 5,
         retriever_top_k_per_level: int = 10,

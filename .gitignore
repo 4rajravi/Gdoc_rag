@@ -1,34 +1,35 @@
-# Ignore data and document formats
-*.csv
-*.pdf
-*.txt
-*.xlsx
-*.docx
-*.html
-*.xml
-*.json
-*.jsonl
-*.yaml
-
-# Ignore logs and temporary files
-*.log
-temp/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Virtual Environments
+# Virtual environments
+.venv/
 venv/
 env/
-.venv/
-bin/
+
+# Data (too large for git)
+data/raw/html/
+data/raw/pdfs/
+data/raw/documents.jsonl
+data/processed/
+
+# Keep the index/manifest for reference
+!data/raw/scrape_index.json
+!data/raw/pdf_manifest.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Models (downloaded at runtime)
+*.bin
+*.pt
+*.onnx
+
+# Qdrant local storage
+qdrant_data/
