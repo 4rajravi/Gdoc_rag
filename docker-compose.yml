@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  qdrant_data:
+
+# Note: Ollama runs natively on macOS (not in Docker) for GPU/Metal support.
+# Start it separately with: ollama serve
+#
+# To run the full stack:
+#   1. docker compose up -d          (starts Qdrant)
+#   2. ollama serve                  (starts Ollama in another terminal)
+#   3. python run_indexing.py --recreate  (index documents)
+#   4. python run_server.py          (starts FastAPI on :8000)
+#   5. cd frontend && npm install && npm run dev  (starts React on :3000)
