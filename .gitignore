@@ -1,13 +1,10 @@
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.pyc
+*.egg-info/
+dist/
+build/
+*.egg
 
 # Virtual environments
 .venv/
@@ -44,3 +41,11 @@ Thumbs.db
 
 # Qdrant local storage
 qdrant_data/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Docker
+docker-compose.override.yml
