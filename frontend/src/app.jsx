@@ -2,13 +2,24 @@ import { useState, useRef, useEffect } from 'react'
 
 const API_URL = '/api'
 
-const SUGGESTED_QUESTIONS = [
-  "How do I register my address in Germany?",
+const CATEGORIES = [
+  { id: 'anmeldung', label: 'Anmeldung', icon: '\u{1F4CD}' },
+  { id: 'visa', label: 'Visa & Permits', icon: '\u{1F6C2}' },
+  { id: 'tax', label: 'Taxes', icon: '\u{1F4CA}' },
+  { id: 'health_insurance', label: 'Insurance', icon: '\u{1F3E5}' },
+  { id: 'banking', label: 'Banking', icon: '\u{1F3E6}' },
+  { id: 'housing', label: 'Housing', icon: '\u{1F3E0}' },
+  { id: 'work', label: 'Work', icon: '\u{1F4BC}' },
+  { id: 'university', label: 'University', icon: '\u{1F393}' },
+]
+
+const STARTERS = [
+  "How do I register my address after moving?",
   "What health insurance do I need as a student?",
-  "How do I file a tax return (Steuererklärung)?",
-  "What documents do I need for a residence permit?",
+  "How do I file my first Steuererkl\u00E4rung?",
+  "What's the process for a Blue Card?",
   "How do I open a bank account without Schufa?",
-  "Wie mache ich eine Anmeldung?",
+  "Wie mache ich eine Anmeldung in Hamburg?",
 ]
 
 export default function App() {
@@ -17,301 +28,267 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState(null)
   const [showDebug, setShowDebug] = useState(false)
-  const messagesEndRef = useRef(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
-    fetch(`${API_URL}/health`)
-      .then(r => r.json())
-      .then(setHealth)
-      .catch(() => setHealth({ status: 'error' }))
+    fetch(`${API_URL}/health`).then(r => r.json()).then(setHealth).catch(() => {})
   }, [])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
-  const sendQuery = async (question) => {
-    if (!question.trim() || loading) return
-
-    const userMsg = { role: 'user', content: question }
-    setMessages(prev => [...prev, userMsg])
+  const send = async (q) => {
+    if (!q.trim() || loading) return
+    setMessages(prev => [...prev, { role: 'user', content: q }])
     setInput('')
     setLoading(true)
-
     try {
-      const resp = await fetch(`${API_URL}/query`, {
+      const r = await fetch(`${API_URL}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, mode: 'full' }),
+        body: JSON.stringify({ question: q, mode: 'full' }),
       })
-
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-
-      const data = await resp.json()
-      const assistantMsg = { role: 'assistant', content: data.answer, data }
-      setMessages(prev => [...prev, assistantMsg])
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `Error: ${err.message}. Make sure the backend is running.`,
-        data: null,
-      }])
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data = await r.json()
+      setMessages(prev => [...prev, { role: 'assistant', content: data.answer, data }])
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Is the backend running?', data: null }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()
     }
   }
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    sendQuery(input)
-  }
-
-  const totalTime = (timing) => {
-    if (!timing) return ''
-    return Object.values(timing).reduce((a, b) => a + b, 0).toFixed(1)
-  }
+  const totalTime = (t) => t ? Object.values(t).reduce((a, b) => a + b, 0).toFixed(1) : '\u2014'
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <h1 style={styles.title}>German Bureaucracy Helper</h1>
-          <span style={styles.subtitle}>RAG-powered assistant for international residents</span>
-        </div>
-        <div style={styles.headerRight}>
-          <button
-            onClick={() => setShowDebug(d => !d)}
-            style={{...styles.debugToggle, ...(showDebug ? styles.debugToggleActive : {})}}
-          >
-            {showDebug ? '🔍 Debug ON' : '🔍 Debug'}
-          </button>
-          <div style={{
-            ...styles.statusDot,
-            backgroundColor: health?.status === 'healthy' ? '#22c55e' : health?.status === 'degraded' ? '#eab308' : '#ef4444'
-          }} title={health?.status || 'checking...'} />
-        </div>
-      </header>
-
-      {/* Messages */}
-      <main style={styles.messages}>
-        {messages.length === 0 && (
-          <div style={styles.welcome}>
-            <h2 style={styles.welcomeTitle}>Welcome! Ask me anything about German bureaucracy.</h2>
-            <p style={styles.welcomeText}>
-              I can help with Anmeldung, visa applications, health insurance, taxes, banking, and more.
-            </p>
-            <div style={styles.suggestions}>
-              {SUGGESTED_QUESTIONS.map((q, i) => (
-                <button key={i} style={styles.suggestionBtn} onClick={() => sendQuery(q)}>
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={i} style={msg.role === 'user' ? styles.userRow : styles.assistantRow}>
-            <div style={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
-              <div style={styles.messageText}>{msg.content}</div>
-
-              {/* Sources */}
-              {msg.data?.sources?.length > 0 && (
-                <div style={styles.sources}>
-                  <div style={styles.sourcesLabel}>Sources:</div>
-                  {msg.data.sources.map((src, j) => (
-                    <a key={j} href={src.url} target="_blank" rel="noopener noreferrer" style={styles.sourceLink}>
-                      {src.source} — {src.title}
-                    </a>
-                  ))}
-                </div>
-              )}
-
-              {/* Debug info */}
-              {showDebug && msg.data && (
-                <div style={styles.debug}>
-                  <div style={styles.debugGrid}>
-                    <span style={styles.debugLabel}>Category:</span>
-                    <span>{msg.data.intent_category}</span>
-                    <span style={styles.debugLabel}>Specificity:</span>
-                    <span>{msg.data.intent_specificity}</span>
-                    <span style={styles.debugLabel}>Levels:</span>
-                    <span>{msg.data.search_levels?.join(', ')}</span>
-                    <span style={styles.debugLabel}>Retrieved:</span>
-                    <span>{msg.data.retrieved_count} → reranked to {msg.data.reranked_count}</span>
-                    <span style={styles.debugLabel}>Chunks used:</span>
-                    <span>{msg.data.chunks_used}</span>
-                    <span style={styles.debugLabel}>Time:</span>
-                    <span>{totalTime(msg.data.timing)}s</span>
-                  </div>
-                  {msg.data.reformulated_query && msg.data.reformulated_query !== msg.content && (
-                    <div style={styles.debugReformulated}>
-                      Reformulated: "{msg.data.reformulated_query}"
-                    </div>
-                  )}
-                  {msg.data.expanded_queries?.length > 1 && (
-                    <div style={styles.debugExpanded}>
-                      Expanded: {msg.data.expanded_queries.length} variants
-                    </div>
-                  )}
-                  {msg.data.timing && (
-                    <div style={styles.debugTiming}>
-                      {Object.entries(msg.data.timing).map(([k, v]) => (
-                        <span key={k} style={styles.timingTag}>{k}: {v.toFixed(1)}s</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {loading && (
-          <div style={styles.assistantRow}>
-            <div style={styles.assistantBubble}>
-              <div style={styles.loadingDots}>
-                <span style={styles.dot}>●</span>
-                <span style={{...styles.dot, animationDelay: '0.2s'}}>●</span>
-                <span style={{...styles.dot, animationDelay: '0.4s'}}>●</span>
+    <>
+      <style>{globalStyles}</style>
+      <div className="app">
+        <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+          <div className="sidebar-header">
+            <div className="logo">
+              <span className="logo-icon">DE</span>
+              <div className="logo-text">
+                <span className="logo-title">Bureaucracy</span>
+                <span className="logo-sub">RAG Assistant</span>
               </div>
             </div>
           </div>
-        )}
+          <button className="new-chat" onClick={() => setMessages([])}><span>+</span> New conversation</button>
+          <div className="sidebar-section">
+            <div className="sidebar-label">Topics</div>
+            {CATEGORIES.map(c => (
+              <button key={c.id} className="topic-btn" onClick={() => send(`Tell me about ${c.label} in Germany`)}>
+                <span className="topic-icon">{c.icon}</span>{c.label}
+              </button>
+            ))}
+          </div>
+          <div className="sidebar-footer">
+            <label className="toggle-row">
+              <span>Debug</span>
+              <div className={`toggle ${showDebug ? 'on' : ''}`} onClick={() => setShowDebug(d => !d)}><div className="toggle-thumb" /></div>
+            </label>
+            <div className="status-row">
+              <div className={`status-dot ${health?.status === 'healthy' ? 'green' : 'red'}`} />
+              <span>{health?.status === 'healthy' ? 'All systems operational' : 'Checking services...'}</span>
+            </div>
+          </div>
+        </aside>
 
-        <div ref={messagesEndRef} />
-      </main>
+        <main className="chat-area">
+          <div className="chat-header">
+            <button className="menu-btn" onClick={() => setSidebarOpen(s => !s)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            </button>
+            <div className="chat-header-info">
+              <span className="chat-header-title">German Bureaucracy Helper</span>
+              <span className="chat-header-sub">multilingual-e5 \u00B7 Qdrant \u00B7 cross-encoder reranker \u00B7 Ollama</span>
+            </div>
+          </div>
 
-      {/* Input */}
-      <form onSubmit={handleSubmit} style={styles.inputArea}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Ask about Anmeldung, visa, insurance, taxes..."
-          style={styles.input}
-          disabled={loading}
-        />
-        <button type="submit" style={styles.sendBtn} disabled={loading || !input.trim()}>
-          Send
-        </button>
-      </form>
+          <div className="messages">
+            {messages.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-hero">
+                  <div className="empty-badge">RAG-powered</div>
+                  <h1>Navigate German<br/>bureaucracy with ease</h1>
+                  <p>Ask about Anmeldung, visa, insurance, taxes \u2014 in English or German.</p>
+                </div>
+                <div className="starters">
+                  {STARTERS.map((q, i) => (
+                    <button key={i} className="starter-card" onClick={() => send(q)} style={{ animationDelay: `${i * 0.06}s` }}>
+                      <span className="starter-arrow">\u2192</span>{q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              messages.map((msg, i) => (
+                <div key={i} className={`msg-row ${msg.role}`}>
+                  {msg.role === 'assistant' && <div className="avatar">DE</div>}
+                  <div className={`msg-bubble ${msg.role}`}>
+                    <div className="msg-text">{msg.content}</div>
+                    {msg.data?.sources?.length > 0 && (
+                      <div className="sources">
+                        <span className="sources-label">Sources</span>
+                        {msg.data.sources.map((s, j) => (
+                          <a key={j} href={s.url} target="_blank" rel="noopener noreferrer" className="source-chip">
+                            {s.source}
+                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l6-6M5 3h4v4"/></svg>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {showDebug && msg.data && (
+                      <div className="debug-panel">
+                        <div className="debug-row">
+                          <span className="debug-tag">{msg.data.intent_category}</span>
+                          <span className="debug-tag">{msg.data.intent_specificity}</span>
+                          <span className="debug-tag">{msg.data.search_levels?.join(' ')}</span>
+                          <span className="debug-tag">{msg.data.retrieved_count}\u2192{msg.data.reranked_count} chunks</span>
+                          <span className="debug-tag accent">{totalTime(msg.data.timing)}s</span>
+                        </div>
+                        {msg.data.timing && (
+                          <div className="debug-timing">
+                            {Object.entries(msg.data.timing).map(([k, v]) => (
+                              <div key={k} className="timing-bar-row">
+                                <span className="timing-label">{k}</span>
+                                <div className="timing-track">
+                                  <div className="timing-fill" style={{ width: `${Math.min((v / Math.max(...Object.values(msg.data.timing))) * 100, 100)}%` }} />
+                                </div>
+                                <span className="timing-val">{v.toFixed(1)}s</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+            {loading && (
+              <div className="msg-row assistant">
+                <div className="avatar">DE</div>
+                <div className="msg-bubble assistant"><div className="typing"><span /><span /><span /></div></div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
 
-      <style>{keyframes}</style>
-    </div>
+          <form className="input-area" onSubmit={e => { e.preventDefault(); send(input) }}>
+            <div className="input-wrap">
+              <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} placeholder="Ask about Anmeldung, visa, taxes, insurance..." disabled={loading} />
+              <button type="submit" disabled={loading || !input.trim()} className="send-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+              </button>
+            </div>
+          </form>
+        </main>
+      </div>
+    </>
   )
 }
 
-const keyframes = `
-  @keyframes pulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 1; }
+const globalStyles = `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --bg-primary: #0a0a0c; --bg-secondary: #111114; --bg-tertiary: #18181c;
+    --bg-hover: #1f1f24; --border: #2a2a30; --border-subtle: #1e1e24;
+    --text-primary: #e8e8ec; --text-secondary: #8e8e96; --text-tertiary: #5a5a62;
+    --accent: #6366f1; --accent-dim: #4f46e520; --accent-glow: #6366f130;
+    --user-bg: #1a1a40; --user-border: #2d2d5e;
+    --green: #22c55e; --red: #ef4444;
+    --font: 'DM Sans', -apple-system, sans-serif; --mono: 'JetBrains Mono', monospace;
   }
+  body { font-family: var(--font); background: var(--bg-primary); color: var(--text-primary); -webkit-font-smoothing: antialiased; }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 260px; background: var(--bg-secondary); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; transition: width 0.2s; overflow: hidden; flex-shrink: 0; }
+  .sidebar.collapsed { width: 0; border: none; }
+  .sidebar-header { padding: 20px 16px 12px; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), #818cf8); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #fff; letter-spacing: 0.5px; }
+  .logo-text { display: flex; flex-direction: column; }
+  .logo-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .logo-sub { font-size: 11px; color: var(--text-tertiary); }
+  .new-chat { margin: 8px 12px; padding: 9px 14px; border-radius: 8px; border: 1px dashed var(--border); background: transparent; color: var(--text-secondary); font: 13px var(--font); cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .new-chat:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .new-chat span { font-size: 16px; }
+  .sidebar-section { flex: 1; overflow-y: auto; padding: 12px; }
+  .sidebar-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-tertiary); padding: 8px 6px 6px; }
+  .topic-btn { width: 100%; padding: 8px 10px; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); font: 13px var(--font); cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; }
+  .topic-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .topic-icon { font-size: 14px; }
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border-subtle); }
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+  .toggle { width: 34px; height: 18px; border-radius: 10px; background: var(--bg-hover); border: 1px solid var(--border); position: relative; cursor: pointer; transition: all 0.2s; }
+  .toggle.on { background: var(--accent); border-color: var(--accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+  .toggle.on .toggle-thumb { transform: translateX(16px); }
+  .status-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 11px; color: var(--text-tertiary); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .status-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.red { background: var(--red); }
+  .chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg-primary); }
+  .chat-header { padding: 12px 20px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 14px; background: var(--bg-secondary); }
+  .menu-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 4px; }
+  .menu-btn:hover { color: var(--text-primary); }
+  .chat-header-title { font-size: 14px; font-weight: 500; }
+  .chat-header-sub { font-size: 11px; color: var(--text-tertiary); font-family: var(--mono); }
+  .chat-header-info { display: flex; flex-direction: column; gap: 1px; }
+  .messages { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
+  .messages::-webkit-scrollbar { width: 6px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .msg-row { display: flex; gap: 12px; padding: 6px 28px; max-width: 900px; margin: 0 auto; width: 100%; animation: msgIn 0.25s ease-out; }
+  .msg-row.user { justify-content: flex-end; }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .avatar { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; background: linear-gradient(135deg, var(--accent), #818cf8); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; letter-spacing: 0.5px; margin-top: 4px; }
+  .msg-bubble { max-width: 720px; border-radius: 12px; padding: 14px 18px; line-height: 1.7; font-size: 14px; }
+  .msg-bubble.user { background: var(--user-bg); border: 1px solid var(--user-border); color: #c7c7ff; }
+  .msg-bubble.assistant { background: var(--bg-tertiary); border: 1px solid var(--border-subtle); }
+  .msg-text { white-space: pre-wrap; word-break: break-word; }
+  .sources { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .sources-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-tertiary); margin-right: 4px; }
+  .source-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-family: var(--mono); background: var(--accent-dim); color: #818cf8; text-decoration: none; border: 1px solid #6366f120; }
+  .source-chip:hover { background: #6366f130; border-color: var(--accent); }
+  .debug-panel { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-subtle); }
+  .debug-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .debug-tag { padding: 2px 8px; border-radius: 3px; font-size: 10px; font-family: var(--mono); background: var(--bg-hover); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+  .debug-tag.accent { background: var(--accent-dim); color: #818cf8; border-color: #6366f130; }
+  .debug-timing { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .timing-bar-row { display: flex; align-items: center; gap: 8px; }
+  .timing-label { font-size: 10px; font-family: var(--mono); color: var(--text-tertiary); width: 80px; text-align: right; }
+  .timing-track { flex: 1; height: 4px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .timing-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s ease; }
+  .timing-val { font-size: 10px; font-family: var(--mono); color: var(--text-tertiary); width: 36px; }
+  .typing { display: flex; gap: 4px; padding: 4px 0; }
+  .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px 28px; }
+  .empty-hero { text-align: center; margin-bottom: 40px; }
+  .empty-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-family: var(--mono); font-weight: 500; background: var(--accent-dim); color: #818cf8; border: 1px solid #6366f120; margin-bottom: 16px; }
+  .empty-hero h1 { font-size: 32px; font-weight: 600; line-height: 1.25; letter-spacing: -0.5px; color: var(--text-primary); margin-bottom: 10px; }
+  .empty-hero p { font-size: 15px; color: var(--text-secondary); max-width: 440px; }
+  .starters { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; width: 100%; max-width: 640px; }
+  .starter-card { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary); font: 13px var(--font); text-align: left; cursor: pointer; display: flex; align-items: flex-start; gap: 8px; animation: fadeUp 0.3s ease-out both; }
+  .starter-card:hover { border-color: var(--accent); color: var(--text-primary); background: var(--bg-tertiary); transform: translateY(-1px); }
+  .starter-arrow { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .input-area { padding: 16px 28px 20px; background: linear-gradient(to top, var(--bg-primary) 80%, transparent); }
+  .input-wrap { max-width: 900px; margin: 0 auto; display: flex; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-secondary); overflow: hidden; }
+  .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .input-wrap input { flex: 1; padding: 13px 16px; background: transparent; border: none; color: var(--text-primary); font: 14px var(--font); outline: none; }
+  .input-wrap input::placeholder { color: var(--text-tertiary); }
+  .send-btn { padding: 8px 14px; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; display: flex; align-items: center; }
+  .send-btn:not(:disabled):hover { color: var(--accent); }
+  .send-btn:disabled { opacity: 0.3; cursor: default; }
+  @media (max-width: 768px) { .sidebar { position: fixed; z-index: 100; height: 100vh; } .sidebar.collapsed { width: 0; } .empty-hero h1 { font-size: 24px; } .starters { grid-template-columns: 1fr; } }
 `
-
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    maxWidth: 800,
-    margin: '0 auto',
-    fontFamily: "'Inter', -apple-system, sans-serif",
-    color: '#1a1a1a',
-    backgroundColor: '#fafafa',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '16px 24px',
-    borderBottom: '1px solid #e5e5e5',
-    backgroundColor: '#fff',
-  },
-  headerLeft: { display: 'flex', flexDirection: 'column', gap: 2 },
-  headerRight: { display: 'flex', alignItems: 'center', gap: 12 },
-  title: { margin: 0, fontSize: 18, fontWeight: 600, color: '#111' },
-  subtitle: { fontSize: 13, color: '#888' },
-  statusDot: { width: 10, height: 10, borderRadius: '50%' },
-  debugToggle: {
-    padding: '4px 10px', fontSize: 12, border: '1px solid #ddd',
-    borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#666',
-  },
-  debugToggleActive: { background: '#f0f4ff', borderColor: '#93b4f8', color: '#2563eb' },
-
-  messages: {
-    flex: 1, overflowY: 'auto', padding: '24px 16px',
-    display: 'flex', flexDirection: 'column', gap: 16,
-  },
-
-  welcome: { textAlign: 'center', padding: '60px 20px' },
-  welcomeTitle: { fontSize: 22, fontWeight: 600, marginBottom: 8, color: '#111' },
-  welcomeText: { fontSize: 15, color: '#666', marginBottom: 28 },
-  suggestions: {
-    display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
-  },
-  suggestionBtn: {
-    padding: '8px 14px', fontSize: 13, border: '1px solid #ddd',
-    borderRadius: 8, background: '#fff', cursor: 'pointer', color: '#333',
-    transition: 'all 0.15s',
-    maxWidth: 280, textAlign: 'left',
-  },
-
-  userRow: { display: 'flex', justifyContent: 'flex-end' },
-  assistantRow: { display: 'flex', justifyContent: 'flex-start' },
-  userBubble: {
-    maxWidth: '75%', padding: '10px 16px', borderRadius: '16px 16px 4px 16px',
-    backgroundColor: '#2563eb', color: '#fff', fontSize: 14, lineHeight: 1.6,
-  },
-  assistantBubble: {
-    maxWidth: '85%', padding: '14px 18px', borderRadius: '16px 16px 16px 4px',
-    backgroundColor: '#fff', border: '1px solid #e5e5e5', fontSize: 14, lineHeight: 1.7,
-  },
-  messageText: { whiteSpace: 'pre-wrap' },
-
-  sources: {
-    marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0',
-    display: 'flex', flexDirection: 'column', gap: 4,
-  },
-  sourcesLabel: { fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 },
-  sourceLink: {
-    fontSize: 12, color: '#2563eb', textDecoration: 'none',
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-  },
-
-  debug: {
-    marginTop: 12, padding: 10, backgroundColor: '#f8f9fc',
-    borderRadius: 8, fontSize: 12, color: '#555',
-  },
-  debugGrid: {
-    display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 10px',
-  },
-  debugLabel: { fontWeight: 500, color: '#888' },
-  debugReformulated: { marginTop: 6, fontStyle: 'italic', color: '#666' },
-  debugExpanded: { marginTop: 2, color: '#666' },
-  debugTiming: { marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 },
-  timingTag: {
-    padding: '2px 6px', backgroundColor: '#e8ecf4', borderRadius: 4, fontSize: 11, color: '#555',
-  },
-
-  loadingDots: { display: 'flex', gap: 4, padding: '4px 0' },
-  dot: { animation: 'pulse 1s ease-in-out infinite', fontSize: 12, color: '#999' },
-
-  inputArea: {
-    display: 'flex', gap: 8, padding: '12px 16px',
-    borderTop: '1px solid #e5e5e5', backgroundColor: '#fff',
-  },
-  input: {
-    flex: 1, padding: '10px 14px', fontSize: 14, border: '1px solid #ddd',
-    borderRadius: 10, outline: 'none', fontFamily: 'inherit',
-  },
-  sendBtn: {
-    padding: '10px 20px', fontSize: 14, fontWeight: 500,
-    border: 'none', borderRadius: 10, backgroundColor: '#2563eb',
-    color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
-  },
-}
