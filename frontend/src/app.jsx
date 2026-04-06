@@ -3,20 +3,20 @@ import { useState, useRef, useEffect } from 'react'
 const API_URL = '/api'
 
 const CATEGORIES = [
-  { id: 'anmeldung', label: 'Anmeldung', icon: '\u{1F4CD}' },
-  { id: 'visa', label: 'Visa & Permits', icon: '\u{1F6C2}' },
-  { id: 'tax', label: 'Taxes', icon: '\u{1F4CA}' },
-  { id: 'health_insurance', label: 'Insurance', icon: '\u{1F3E5}' },
-  { id: 'banking', label: 'Banking', icon: '\u{1F3E6}' },
-  { id: 'housing', label: 'Housing', icon: '\u{1F3E0}' },
-  { id: 'work', label: 'Work', icon: '\u{1F4BC}' },
-  { id: 'university', label: 'University', icon: '\u{1F393}' },
+  { id: 'anmeldung', label: 'Anmeldung', icon: '📍' },
+  { id: 'visa', label: 'Visa & Permits', icon: '🛂' },
+  { id: 'tax', label: 'Taxes', icon: '📊' },
+  { id: 'health_insurance', label: 'Insurance', icon: '🏥' },
+  { id: 'banking', label: 'Banking', icon: '🏦' },
+  { id: 'housing', label: 'Housing', icon: '🏠' },
+  { id: 'work', label: 'Work', icon: '💼' },
+  { id: 'university', label: 'University', icon: '🎓' },
 ]
 
 const STARTERS = [
   "How do I register my address after moving?",
   "What health insurance do I need as a student?",
-  "How do I file my first Steuererkl\u00E4rung?",
+  "How do I file my first Steuererklärung?",
   "What's the process for a Blue Card?",
   "How do I open a bank account without Schufa?",
   "Wie mache ich eine Anmeldung in Hamburg?",
@@ -62,7 +62,7 @@ export default function App() {
     }
   }
 
-  const totalTime = (t) => t ? Object.values(t).reduce((a, b) => a + b, 0).toFixed(1) : '\u2014'
+  const totalTime = (t) => t ? Object.values(t).reduce((a, b) => a + b, 0).toFixed(1) : '—'
 
   return (
     <>
@@ -106,7 +106,7 @@ export default function App() {
             </button>
             <div className="chat-header-info">
               <span className="chat-header-title">German Bureaucracy Helper</span>
-              <span className="chat-header-sub">multilingual-e5 \u00B7 Qdrant \u00B7 cross-encoder reranker \u00B7 Ollama</span>
+              <span className="chat-header-sub">multilingual-e5 · Qdrant · cross-encoder reranker · Ollama</span>
             </div>
           </div>
 
@@ -116,12 +116,12 @@ export default function App() {
                 <div className="empty-hero">
                   <div className="empty-badge">RAG-powered</div>
                   <h1>Navigate German<br/>bureaucracy with ease</h1>
-                  <p>Ask about Anmeldung, visa, insurance, taxes \u2014 in English or German.</p>
+                  <p>Ask about Anmeldung, visa, insurance, taxes — in English or German.</p>
                 </div>
                 <div className="starters">
                   {STARTERS.map((q, i) => (
                     <button key={i} className="starter-card" onClick={() => send(q)} style={{ animationDelay: `${i * 0.06}s` }}>
-                      <span className="starter-arrow">\u2192</span>{q}
+                      <span className="starter-arrow">→</span>{q}
                     </button>
                   ))}
                 </div>
@@ -149,7 +149,7 @@ export default function App() {
                           <span className="debug-tag">{msg.data.intent_category}</span>
                           <span className="debug-tag">{msg.data.intent_specificity}</span>
                           <span className="debug-tag">{msg.data.search_levels?.join(' ')}</span>
-                          <span className="debug-tag">{msg.data.retrieved_count}\u2192{msg.data.reranked_count} chunks</span>
+                          <span className="debug-tag">{msg.data.retrieved_count}→{msg.data.reranked_count} chunks</span>
                           <span className="debug-tag accent">{totalTime(msg.data.timing)}s</span>
                         </div>
                         {msg.data.timing && (
