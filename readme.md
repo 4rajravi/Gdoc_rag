@@ -148,9 +148,3 @@ Shows intent classification, search levels, retrieved/reranked chunk counts, ref
 python run_scraper.py --sources your-new-source
 python run_indexing.py --recreate
 ```
-
----
-
-## License
-
-MIT
